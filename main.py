@@ -176,8 +176,8 @@ class ImageMatchThread(QThread):
 
             if len(good_matches) > self.parent().MIN_MATCH_COUNT:
                 self.match_found_signal.emit()
-                # 发现目标后，可以考虑停止线程以节省资源，也可以继续循环监控
-                # break
+                # 发现目标图片后,直接停止得了
+
 
 
 if __name__ == '__main__':
