@@ -39,6 +39,7 @@ template_image4 = cv2.imread(TARGET3,cv2.IMREAD_GRAYSCALE)
 class PushButton(QWidget):
     def __init__(self):
         super(PushButton, self).__init__()
+        self.find_chuankou = None
         self.search_chuankou = None
         self.match_thread = None
         self.MIN_MATCH_COUNT = 10
@@ -47,6 +48,7 @@ class PushButton(QWidget):
         self.closeButton = None
         self.cap = None
         self.openButton = None
+        # 设置串口那个，要不然还得进行异常处理
         self.video_frame = QLabel(self)
         # 初始化窗口
         self.initWindow()
@@ -96,7 +98,7 @@ class PushButton(QWidget):
                 match_location = max_loc
 
             # 设置匹配阈值
-            match_threshold = 0.52
+            match_threshold = 0.45
 
             if max_val >= match_threshold:
                 if i == 0:
@@ -151,9 +153,13 @@ class PushButton(QWidget):
         layout.addWidget(self.search_chuankou, 1, 1)
         layout.addWidget(self.send_message,2,0)
 
+        # 控制是否进行模板匹配的标志位
+        self.is_searching = False
+
+        # 如果没有找到串口，那么就不可以发送信息
+        self.find_chuankou = False
 
 
-        self.is_searching = False  # 控制是否进行模板匹配的标志位
 
     def close_camera(self):
         if self.cap is not None:
@@ -181,22 +187,27 @@ class PushButton(QWidget):
             for i in range(num):
                 port_info = port_list[i]  # 不需要再包裹一层list
                 print(f"串口名称：{port_info.device}, 描述：{port_info.description}, 接口：{port_info.interface}")
+                # 控制是否进行模板匹配的标志位
+                self.find_chuankou = True
 
     # 打开串口通信
     def open_chuankou(self):
         # 定义串口参数
         # 替换成实际的串口号,可能是COM1
-        port = "COM1"
-        # 波特率
-        baudrate = 9600
-        # 打开串口
-        ser = serial.Serial(port, baudrate, timeout=1)
-        # 将十六进制值0xa转换成字节
-        data_to_send = bytes([0xa])
-        # 发送数据
-        ser.write(data_to_send)
-        # 关闭串口
-        ser.close()
+        if  not self.find_chuankou:
+            print("没有找到串口，你不可以发送信息")
+        else:
+            port = "COM7"
+            # 波特率
+            baudrate = 9600
+            # 打开串口
+            ser = serial.Serial(port, baudrate, timeout=1)
+            # 发个0xa试一试
+            data_to_send = bytes([0xa])
+            # 发送数据
+            ser.write(data_to_send)
+            # 关闭串口
+            ser.close()
 
 
 
