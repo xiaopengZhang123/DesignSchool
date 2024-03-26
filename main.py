@@ -94,7 +94,7 @@ class PushButton(QWidget):
                 match_location = max_loc
 
             # 设置匹配阈值
-            match_threshold = 0.4
+            match_threshold = 0.3
 
             if max_val >= match_threshold:
                 print(f"目标已匹配！位置：({match_location[0]}, {match_location[1]}), 匹配到的是模板图片{i + 1}")
