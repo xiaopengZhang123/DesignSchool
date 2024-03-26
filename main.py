@@ -8,38 +8,36 @@ __author__ = 'zxp'
 # 这是我们的图片文件路径
 
 KNOWN_IMAGE_PATH = "./download.jpg"
+TARGET1 = "./target1.jpg"
+TARGET2 = "./target2.jpg"
+TARGET3 = "./target3.jpg"
 
 """
 
 """
 
-import time
-from PyQt5.uic.properties import QtGui
+
 import sys
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout
-from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QMessageBox
-import numpy as np
-import cv2
-import time
-from random import uniform
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt
-import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QLabel,QGridLayout
 from PyQt5.QtGui import QImage, QPixmap
 import cv2
-from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer
 from serial.tools import list_ports
+
+# 这是我们的目标图片
+template_image = cv2.imread(KNOWN_IMAGE_PATH,cv2.IMREAD_GRAYSCALE)
+
+# 先提取出来
+template_image1 = cv2.imread(TARGET1,cv2.IMREAD_GRAYSCALE)
+template_image2 = cv2.imread(TARGET2,cv2.IMREAD_GRAYSCALE)
+template_image3 = cv2.imread(TARGET3,cv2.IMREAD_GRAYSCALE)
+
 
 
 class PushButton(QWidget):
     def __init__(self):
         super(PushButton, self).__init__()
+        self.search_chuankou = None
         self.match_thread = None
         self.MIN_MATCH_COUNT = 10
         self.start_search_button = None
@@ -51,112 +49,115 @@ class PushButton(QWidget):
         # 初始化窗口
         self.initWindow()
         # 初始化布局
-        self.create_layout()
         self.show()
-        self.find_chuankou()
 
 
     def open_camera(self):
         # 打开默认的第一个摄像头
         if not self.cap:
             self.cap = cv2.VideoCapture(0)
+            if not self.cap.isOpened():
+                print("无法打开摄像头")
+                sys.exit(-1)
+
             # 创建定时器，每隔一段时间获取一帧图像并显示
             self.timer = QTimer(self)
-            self.timer.timeout.connect(self.show_frame)
-            # 每30毫秒获取一次新帧，根据实际情况调整
-            # 这个其实也不需要去设置这么快
-            self.timer.start(30)
+            self.timer.timeout.connect(self.show_frame_and_search_template)
+            # 每500毫秒获取一次新帧，根据实际情况调整
+            self.timer.start(100)
 
-    @pyqtSlot()
-    def show_frame(self):
-        ret, frame = self.cap.read()  # 读取摄像头的一帧图像
+    # c style name
+    # 这里其实有两种方法，如果老师要问的话，可以使用模板匹配或者SIFT算法（特征提取）
+    def show_frame_and_search_template(self):
+        # 从摄像头中去读取我们的视频帧
+        ret, frame = self.cap.read()
+        if not ret:
+            print("无法获取摄像头帧")
+            sys.exit(-1)
 
-        if ret:
-            # 转换图像格式以适应Qt
-            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            # 设置长宽高
-            h, w, ch = img.shape
-            bytes_per_line = ch * w
-            Qtformat = QImage(img.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(Qtformat)
-            self.video_frame.setPixmap(pixmap.scaled(self.video_frame.size(), Qt.KeepAspectRatio))
+        # 转换为灰度图像
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        else:
-            self.cap.release()
+        matched_template_number = None
+
+        for i, template_image in enumerate([template_image1, template_image2, template_image3]):
+            method = cv2.TM_CCOEFF_NORMED
+
+            # 执行模板匹配
+            result = cv2.matchTemplate(gray_frame, template_image, method)
+            # 寻找最大匹配值及其位置
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+            if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
+                match_location = min_loc
+            else:
+                match_location = max_loc
+
+            # 设置匹配阈值
+            match_threshold = 0.4
+
+            if max_val >= match_threshold:
+                print(f"目标已匹配！位置：({match_location[0]}, {match_location[1]}), 匹配到的是模板图片{i + 1}")
+                matched_template_number = i + 1
+                w, h = template_image.shape[::-1]
+                cv2.rectangle(frame, match_location, (match_location[0] + w, match_location[1] + h), (0, 255, 0), 2)
+                break  # 停止搜索其他模板，因为已经找到一个匹配项
+
+        if matched_template_number is None:
+            print("未找到任何目标匹配")
+
+        # 显示结果图像
+        cv2.imshow('Match Result', frame)
+
+        # 等待用户按键，按任意键退出
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             self.timer.stop()
-            print("无法从摄像头获取数据")
+            self.cap.release()
+            cv2.destroyAllWindows()
+            sys.exit(0)
 
     def initWindow(self):
-        # 设置窗口信号
         self.setWindowTitle("PushButton")
-        # 设置大小
-        # 长 宽 高 低
         self.setGeometry(200, 200, 980, 540)
 
-        # 创建并配置“打开摄像头”按钮
-        self.openButton = QPushButton(self)
-        self.openButton.setText("打开摄像头")
-        # 加个快捷键
+        self.openButton = QPushButton("打开摄像头", self)
         self.openButton.setShortcut('Ctrl+O')
-        # 当按钮被点击时，连接open_camera槽函数
         self.openButton.clicked.connect(self.open_camera)
-        self.openButton.move(900, 10)  # 左上角坐标为(10, 10)
 
-        # 创建一个关闭摄像头
-        self.closeButton = QPushButton(self)
-        self.closeButton.setText("关闭")  # text
+        self.closeButton = QPushButton("关闭", self)
         self.closeButton.setShortcut('Ctrl+Q')
-        # self.closeButton.move(900,500)
-
-        # 当按钮被点击时，连接open_camera槽函数
         self.closeButton.clicked.connect(self.close_camera)
 
-        # 创建开始寻找的按钮
-        # 还是先创建了吧,方便调试一点
-        self.start_search_button = QPushButton();
-        self.start_search_button.setText("开始寻找")
-        self.start_search_button.clicked.connect(self.startSearchTarget);
+        self.start_search_button = QPushButton("开始寻找", self)
+        self.start_search_button.clicked.connect(self.startSearchTarget)
 
-    def create_layout(self):
-        layout = QVBoxLayout()
-        # 添加窗口按钮
-        layout.addWidget(self.openButton)
-        # 关闭按钮
-        layout.addWidget(self.closeButton)
-        # 开启摄像头框架
-        layout.addWidget(self.video_frame)
-        # 开始寻找图片
-        layout.addWidget(self.start_search_button)
-        self.setLayout(layout)
+        self.search_chuankou = QPushButton("寻找串口", self)
+        self.search_chuankou.clicked.connect(self.start_search_chuankou)
+
+        layout = QGridLayout(self)
+        layout.addWidget(self.openButton, 0, 0)
+        layout.addWidget(self.closeButton, 0, 1)
+        layout.addWidget(self.start_search_button, 1, 0)
+        layout.addWidget(self.search_chuankou, 1, 1)
+
+        self.is_searching = False  # 控制是否进行模板匹配的标志位
 
     def close_camera(self):
         if self.cap is not None:
             self.cap.release()  # 关闭摄像头
             self.timer.stop()  # 停止定时器
             self.cap = None  # 重置摄像头对象引用
-            self.video_frame.clear()  # 清空视频帧显示区域
-        else:
-            pass
+            cv2.destroyAllWindows()  # 关闭所有OpenCV窗口
+            self.is_searching = False  # 清除搜索标志位
 
     def startSearchTarget(self):
-        # 检查摄像头是否已经打开
-        if self.cap is not None and self.cap.isOpened():
-            # 加载已知图片并准备匹配所需数据
-            known_target = cv2.imread(KNOWN_IMAGE_PATH, cv2.IMREAD_GRAYSCALE)
-            sift = cv2.xfeatures2d.SIFT_create()
-            target_keypoints, target_descriptors = sift.detectAndCompute(known_target, None)
-
-            self.match_thread = ImageMatchThread(self, target_keypoints, target_descriptors)
-            self.match_thread.match_found_signal.connect(self.on_match_found)
-            self.match_thread.start()
+        if not self.cap:
+            print("未打开摄像头，不可以进行寻找")
         else:
-            print("Not found")
+            self.is_searching = True
+            print("点击了按钮，现在开始寻找")
 
-    def on_match_found(self):
-        print("目标图片已在视频流中找到！")
-
-
-    def find_chuankou(self):
+    def start_search_chuankou(self):
         port_list = list(list_ports.comports())
         num = len(port_list)
 
@@ -164,39 +165,10 @@ class PushButton(QWidget):
             print("找不到任何串口设备")
         else:
             for i in range(num):
-                # 将 ListPortInfo 对象转化为 list
                 port = list(port_list[i])
                 print(port)
 
 
-class ImageMatchThread(QThread):
-    match_found_signal = pyqtSignal()
-
-    def __init__(self, parent, target_image, sift, target_keypoints, target_descriptors, cap):
-        super(ImageMatchThread, self).__init__(parent)
-        self.target_image = target_image
-        self.sift = sift
-        self.target_keypoints = target_keypoints
-        self.target_descriptors = target_descriptors
-        self.cap = cap
-
-    def run(self):
-        while True:
-            ret, frame = self.cap.read()
-            if not ret:
-                break
-
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frame_keypoints, frame_descriptors = self.sift.detectAndCompute(gray_frame, None)
-
-            matcher = cv2.BFMatcher()
-            matches = matcher.match(self.target_descriptors, frame_descriptors)
-
-            good_matches = [m for m in matches if m.distance < 0.75 * min([m.distance for m in matches])]
-
-            if len(good_matches) > self.parent().MIN_MATCH_COUNT:
-                self.match_found_signal.emit()
-                # 发现目标图片后,直接停止得了
 
 
 if __name__ == '__main__':
