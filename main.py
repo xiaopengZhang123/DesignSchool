@@ -34,11 +34,13 @@ from PyQt5.QtGui import QImage, QPixmap
 import cv2
 from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer
+from serial.tools import list_ports
 
 
 class PushButton(QWidget):
     def __init__(self):
         super(PushButton, self).__init__()
+        self.match_thread = None
         self.MIN_MATCH_COUNT = 10
         self.start_search_button = None
         self.timer = None
@@ -51,6 +53,8 @@ class PushButton(QWidget):
         # 初始化布局
         self.create_layout()
         self.show()
+        self.find_chuankou()
+
 
     def open_camera(self):
         # 打开默认的第一个摄像头
@@ -135,18 +139,34 @@ class PushButton(QWidget):
             pass
 
     def startSearchTarget(self):
-        # 加载已知图片并准备匹配所需数据
-        target_image = cv2.imread(KNOWN_IMAGE_PATH, cv2.IMREAD_GRAYSCALE)
-        sift = cv2.xfeatures2d.SIFT_create()
-        target_keypoints, target_descriptors = sift.detectAndCompute(target_image, None)
+        # 检查摄像头是否已经打开
+        if self.cap is not None and self.cap.isOpened():
+            # 加载已知图片并准备匹配所需数据
+            known_target = cv2.imread(KNOWN_IMAGE_PATH, cv2.IMREAD_GRAYSCALE)
+            sift = cv2.xfeatures2d.SIFT_create()
+            target_keypoints, target_descriptors = sift.detectAndCompute(known_target, None)
 
-        # 创建匹配线程
-        match_thread = ImageMatchThread(self, target_image, sift, target_keypoints, target_descriptors, self.cap)
-        match_thread.match_found_signal.connect(self.on_match_found)
-        match_thread.start()
+            self.match_thread = ImageMatchThread(self, target_keypoints, target_descriptors)
+            self.match_thread.match_found_signal.connect(self.on_match_found)
+            self.match_thread.start()
+        else:
+            print("Not found")
 
     def on_match_found(self):
         print("目标图片已在视频流中找到！")
+
+
+    def find_chuankou(self):
+        port_list = list(list_ports.comports())
+        num = len(port_list)
+
+        if num <= 0:
+            print("找不到任何串口设备")
+        else:
+            for i in range(num):
+                # 将 ListPortInfo 对象转化为 list
+                port = list(port_list[i])
+                print(port)
 
 
 class ImageMatchThread(QThread):
@@ -177,7 +197,6 @@ class ImageMatchThread(QThread):
             if len(good_matches) > self.parent().MIN_MATCH_COUNT:
                 self.match_found_signal.emit()
                 # 发现目标图片后,直接停止得了
-
 
 
 if __name__ == '__main__':
