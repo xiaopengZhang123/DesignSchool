@@ -12,10 +12,6 @@ TARGET1 = "./target1.jpg"
 TARGET2 = "./target2.jpg"
 TARGET3 = "./target3.jpg"
 
-"""
-
-"""
-
 import numpy as np
 import serial
 import sys
@@ -56,7 +52,7 @@ class PushButton(QWidget):
     def open_camera(self):
         # 打开默认的第一个摄像头
         if not self.cap:
-            self.cap = cv2.VideoCapture(0)
+            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
             if not self.cap.isOpened():
                 print("无法打开摄像头")
                 sys.exit(-1)
@@ -67,7 +63,7 @@ class PushButton(QWidget):
             # self.timer.timeout.connect(self.sift_match)
 
             # 每100毫秒获取一次新帧，根据实际情况调整
-            self.timer.start(100)
+            self.timer.start(50)
 
     # c style name
     # 这里其实有两种方法，如果老师要问的话，可以使用模板匹配或者SIFT算法（特征提取）
@@ -97,7 +93,8 @@ class PushButton(QWidget):
                 match_location = max_loc
 
             # 设置匹配阈值
-            match_threshold = 0.45
+            # emmm... 这个阈值真是奇怪，目前还算可以匹配得到，后面就不知道了
+            match_threshold = 0.3
 
             if max_val >= match_threshold:
                 print(f"目标已匹配！位置：({match_location[0]}, {match_location[1]}), 匹配到的是模板图片{i + 1}")
@@ -175,6 +172,7 @@ class PushButton(QWidget):
             self.is_searching = False  # 清除搜索标志位
 
     def startSearchTarget(self):
+        print(("Just A Test Message for startSearchTarget"))
         if not self.cap:
             print("未打开摄像头，不可以进行寻找")
         else:
@@ -190,7 +188,7 @@ class PushButton(QWidget):
             return False
         else:
             for i in range(num):
-                port_info = port_list[i]  # 不需要再包裹一层list
+                port_info = port_list[i]
                 print(f"串口名称：{port_info.device}, 描述：{port_info.description}, 接口：{port_info.interface}")
                 # 控制是否进行模板匹配的标志位
                 self.find_chuankou = True
@@ -218,6 +216,8 @@ class PushButton(QWidget):
             # 关闭串口
             ser.close()
 
+
+    # backup 备用算法，不过在实现上还有点问题，还是某个cv库不太对劲
     def sift_match(self):
         # 从摄像头中读取视频帧
         ret, frame = self.cap.read()
