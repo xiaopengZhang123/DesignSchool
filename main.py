@@ -15,15 +15,16 @@ TARGET3 = "./target3.jpg"
 import numpy as np
 import serial
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QLabel, QGridLayout
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QGridLayout
 import cv2
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import QTimer
 from serial.tools import list_ports
 
-# 这是我们的目标图片
+# 这是我们的目标图片，这个就只是个测试文件罢了，测试一下这个template match的功能
 template_image1 = cv2.imread(KNOWN_IMAGE_PATH, cv2.IMREAD_GRAYSCALE)
 
 # 先提取出来
+# 转换为灰度图
 template_image2 = cv2.imread(TARGET1, cv2.IMREAD_GRAYSCALE)
 template_image3 = cv2.imread(TARGET2, cv2.IMREAD_GRAYSCALE)
 template_image4 = cv2.imread(TARGET3, cv2.IMREAD_GRAYSCALE)
@@ -52,6 +53,7 @@ class PushButton(QWidget):
     def open_camera(self):
         # 打开默认的第一个摄像头
         if not self.cap:
+            # 这里就是我们的默认摄像头位置
             self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
             if not self.cap.isOpened():
                 print("无法打开摄像头")
@@ -63,7 +65,7 @@ class PushButton(QWidget):
             # self.timer.timeout.connect(self.sift_match)
 
             # 每100毫秒获取一次新帧，根据实际情况调整
-            self.timer.start(50)
+            self.timer.start(200)
 
     # c style name
     # 这里其实有两种方法，如果老师要问的话，可以使用模板匹配或者SIFT算法（特征提取）
@@ -78,7 +80,7 @@ class PushButton(QWidget):
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         matched_template_number = None
-
+        # 数字转换为列表，这里没有使用target1是因为target1是test文件
         for i, template_image in enumerate([template_image2, template_image3, template_image4]):
             method = cv2.TM_CCOEFF_NORMED
 
@@ -96,13 +98,15 @@ class PushButton(QWidget):
             # emmm... 这个阈值真是奇怪，目前还算可以匹配得到，后面就不知道了
             match_threshold = 0.3
 
+            # 此代码是抄的画框部分
             if max_val >= match_threshold:
                 print(f"目标已匹配！位置：({match_location[0]}, {match_location[1]}), 匹配到的是模板图片{i + 1}")
                 matched_template_number = i + 1
                 w, h = template_image.shape[::-1]
                 cv2.rectangle(frame, match_location, (match_location[0] + w, match_location[1] + h), (0, 255, 0), 2)
-                break  # 停止搜索其他模板，因为已经找到一个匹配项
-
+                # 停止搜索其他模板，因为已经找到一个匹配项，找到就没必要去寻找其他的
+                break
+        # 没想好写什么
         if matched_template_number is None:
             pass
 
@@ -110,6 +114,7 @@ class PushButton(QWidget):
         cv2.imshow('Result', frame)
 
         # 等待用户按键，按任意键退出
+        # 可有可无
         if cv2.waitKey(1) & 0xFF == ord('q'):
             self.timer.stop()
             self.cap.release()
@@ -172,7 +177,7 @@ class PushButton(QWidget):
             self.is_searching = False  # 清除搜索标志位
 
     def startSearchTarget(self):
-        print(("Just A Test Message for startSearchTarget"))
+        print("Just A Test Message for startSearchTarget")
         if not self.cap:
             print("未打开摄像头，不可以进行寻找")
         else:
@@ -209,15 +214,17 @@ class PushButton(QWidget):
             baudrate = 9600
             # 打开串口
             ser = serial.Serial(port, baudrate, timeout=1)
-            # 发个0x3试一试
+            # 发个0x3试一试，转换为字节
             data_to_send = bytes([0x3])
             # 发送数据
             ser.write(data_to_send)
             # 关闭串口
+            # 有开有关
             ser.close()
 
 
     # backup 备用算法，不过在实现上还有点问题，还是某个cv库不太对劲
+    # 这是sift算法的部分，这个算法更加适配
     def sift_match(self):
         # 从摄像头中读取视频帧
         ret, frame = self.cap.read()
@@ -248,7 +255,7 @@ class PushButton(QWidget):
                 if m.distance < 0.75 * n.distance:
                     good_matches.append(m)
 
-            MIN_MATCH_COUNT = 1
+            MIN_MATCH_COUNT = 0.4
             # 如果有足够的有效匹配，则计算对象的位置
             if len(good_matches) > MIN_MATCH_COUNT:  # MIN_MATCH_COUNT 是一个设定的阈值
                 src_pts = np.float32([template_kp[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
